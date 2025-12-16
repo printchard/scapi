@@ -53,10 +53,6 @@ func validateObject(obj *ObjectType, api *APISpec) error {
 			if err := validateObject(typ.ObjectType, api); err != nil {
 				return err
 			}
-		case Array:
-			if err := validateArray(typ.ArrayType, api); err != nil {
-				return err
-			}
 		case Primitive:
 			// Primitive types are always valid
 		default:
@@ -66,31 +62,11 @@ func validateObject(obj *ObjectType, api *APISpec) error {
 	return nil
 }
 
-func validateArray(arr *ArrayType, api *APISpec) error {
-	typ, ok := api.ResolveTypeRef(arr.ElementType)
-	if !ok {
-		return fmt.Errorf("unresolved type reference: %s in array element type", arr.ElementType.Name)
-	}
-	switch typ.Kind {
-	case Object:
-		return validateObject(typ.ObjectType, api)
-	case Array:
-		return validateArray(typ.ArrayType, api)
-	case Primitive:
-		return nil
-	}
-	return fmt.Errorf("unknown type kind: %s in array element type", typ.Kind)
-}
-
 func (api *APISpec) ValidateTypes() error {
 	for typeName, typ := range api.Types {
 		switch typ.Kind {
 		case Object:
 			if err := validateObject(typ.ObjectType, api); err != nil {
-				return err
-			}
-		case Array:
-			if err := validateArray(typ.ArrayType, api); err != nil {
 				return err
 			}
 		case Primitive:
@@ -255,7 +231,11 @@ func (api *APISpec) String() string {
 						if field.Optional {
 							optionalStr = " (optional)"
 						}
-						f.Line("- %s: %s%s", fieldName, fieldType.Kind, optionalStr)
+						cardStr := ""
+						if field.Cardinality == Multiple {
+							cardStr = "[]"
+						}
+						f.Line("- %s: %s%s%s", fieldName, cardStr, fieldType.Kind, optionalStr)
 					}
 				default:
 					f.Line("- %s", typ.Kind)

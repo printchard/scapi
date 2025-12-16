@@ -1,0 +1,25 @@
+spec = "api" IDENTIFIER { typeDecl } endpointDecl { endpointDecl } ;
+
+typeDecl = "type" IDENTIFIER "{" { fieldDecl } "}" ;
+
+fieldDecl = IDENTIFIER [ "?" ] ":" typeSpec [ "?" ] ;
+
+typeSpec = simpleType | arrayType ;
+
+arrayType = "[" typeSpec "]" ;
+
+simpleType = "string" | "integer" | "boolean" | "float" | IDENTIFIER ;
+
+endpointDecl = "endpoint" HTTPMethod PATH "{" endpointBody "}" ;
+
+endpointBody = [ paramsDecl ] [ queryDecl ] [ bodyDecl ] responsesDecl ;
+
+paramsDecl = "params" "{" fieldDecl { fieldDecl } "}" ;
+
+queryDecl = "query" "{" fieldDecl { fieldDecl } "}" ;
+
+bodyDecl = "body" [ "?" ] simpleType ;
+
+responsesDecl = "responses" "{" { responseDecl } "}" ;
+
+responseDecl = STATUS_CODE [ typeSpec ] ;

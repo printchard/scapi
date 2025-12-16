@@ -48,6 +48,9 @@ func (g *GoGenerator) generateObjectTypeDef(typeName string, obj *spec.ObjectTyp
 	for fieldName, field := range obj.Fields {
 		tags := fmt.Sprintf("`json:\"%s", fieldName)
 		goType := g.generateGoType(field.Ref, field.Optional)
+		if field.Cardinality == spec.Multiple {
+			goType = "[]" + goType
+		}
 		if field.Optional {
 			tags += ",omitempty"
 		}
@@ -86,9 +89,6 @@ func (g *GoGenerator) generateGoType(tRef spec.TypeRef, optional bool) string {
 			return "*" + tRef.Name
 		}
 		return tRef.Name
-	} else if g.Resolver.IsArray(tRef) {
-		elemRef, _ := g.Resolver.ArrayElement(tRef)
-		return "[]" + g.generateGoType(elemRef, false)
 	}
 	return "any"
 }
@@ -111,6 +111,9 @@ func (g *GoGenerator) generateParamsWrapper(endpoint spec.Endpoint) string {
 	formatter.Indent()
 	for paramName, field := range endpoint.Input.Params {
 		goType := g.generateGoType(field.Ref, field.Optional)
+		if field.Cardinality == spec.Multiple {
+			goType = "[]" + goType
+		}
 		formatter.Line("%s %s", capitalize(paramName), goType)
 	}
 	formatter.Dedent()

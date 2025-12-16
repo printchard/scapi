@@ -31,7 +31,6 @@ type TypeKind string
 
 const (
 	Object    TypeKind = "object"
-	Array     TypeKind = "array"
 	Primitive TypeKind = "primitive"
 )
 
@@ -39,21 +38,24 @@ type Type struct {
 	Kind          TypeKind
 	ObjectType    *ObjectType
 	PrimitiveType PrimitiveType
-	ArrayType     *ArrayType
 }
 
 type ObjectType struct {
 	Fields map[string]Field
 }
 
-type ArrayType struct {
-	ElementType TypeRef
-}
+type Cardinality int
+
+const (
+	Single Cardinality = iota
+	Multiple
+)
 
 type Field struct {
-	Ref      TypeRef
-	Optional bool
-	Nullable bool
+	Ref         TypeRef
+	Cardinality Cardinality
+	Optional    bool
+	Nullable    bool
 }
 
 type PrimitiveType int

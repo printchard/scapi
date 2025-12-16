@@ -3,10 +3,8 @@ package spec
 type TypeResolver interface {
 	IsPrimitive(TypeRef) bool
 	IsObject(TypeRef) bool
-	IsArray(TypeRef) bool
 	PrimitiveOf(TypeRef) (PrimitiveType, bool)
 	ObjectOf(TypeRef) (*ObjectType, bool)
-	ArrayElement(TypeRef) (TypeRef, bool)
 	MustResolve(TypeRef) *Type
 	IsOptional(Field) bool
 	ResolveSuccessResponse(Endpoint) *Response
@@ -30,11 +28,6 @@ func (r *defaultTypeResolver) IsObject(ref TypeRef) bool {
 	return typ.Kind == Object
 }
 
-func (r *defaultTypeResolver) IsArray(ref TypeRef) bool {
-	typ := r.api.ResolveTypeRefOrPanic(ref)
-	return typ.Kind == Array
-}
-
 func (r *defaultTypeResolver) PrimitiveOf(ref TypeRef) (PrimitiveType, bool) {
 	typ := r.api.ResolveTypeRefOrPanic(ref)
 	if typ.Kind != Primitive {
@@ -49,14 +42,6 @@ func (r *defaultTypeResolver) ObjectOf(ref TypeRef) (*ObjectType, bool) {
 		return nil, false
 	}
 	return typ.ObjectType, true
-}
-
-func (r *defaultTypeResolver) ArrayElement(ref TypeRef) (TypeRef, bool) {
-	typ := r.api.ResolveTypeRefOrPanic(ref)
-	if typ.Kind != Array {
-		return TypeRef{}, false
-	}
-	return typ.ArrayType.ElementType, true
 }
 
 func (r *defaultTypeResolver) MustResolve(ref TypeRef) *Type {

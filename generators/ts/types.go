@@ -49,9 +49,6 @@ func (g *TsGenerator) generateTsType(typeRef spec.TypeRef) string {
 		}
 	} else if g.Resolver.IsObject(typeRef) {
 		return typeRef.Name
-	} else if g.Resolver.IsArray(typeRef) {
-		elemRef, _ := g.Resolver.ArrayElement(typeRef)
-		return g.generateTsType(elemRef) + "[]"
 	}
 	return "any"
 }
@@ -69,6 +66,9 @@ func (g *TsGenerator) generateObjectTypeDef(typeName string, obj *spec.ObjectTyp
 		nullableMark := ""
 		if field.Nullable {
 			nullableMark = " | null"
+		}
+		if field.Cardinality == spec.Multiple {
+			tsType = tsType + "[]"
 		}
 		formatter.Line("%s%s: %s%s;", fieldName, optionalMark, tsType, nullableMark)
 	}

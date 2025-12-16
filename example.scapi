@@ -1,0 +1,28 @@
+api MyApi
+
+type Pet {
+  name: string
+}
+
+type User {
+  id: string
+  name: string
+  age?: integer // optional field
+  favoriteColor: string? // nullable field
+  pets: [Pet]
+}
+
+endpoint GET /users/{id} GetUser {
+  params {
+    id: string
+  }
+  query {
+    verbose: boolean
+  }
+  body User
+
+  responses {
+    200 User
+    404 string
+  }
+}

@@ -1,72 +1,129 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
+	"log"
+	"os"
 
+	"github.com/printchard/scapi/dsl"
 	"github.com/printchard/scapi/generators/golang"
-	"github.com/printchard/scapi/spec"
+	"github.com/printchard/scapi/generators/ts"
 )
 
+const usage = `Usage: scapi [command] [options] <input file>
+
+Commands:
+	generate [LANGUAGE] [TARGET]   Generate code from the input file
+	validate 	                     Validate the input file
+
+Options:
+	-help       Show this help message
+	-i          Input file path
+	-o          Output file path (optional, defaults to stdout)`
+
 func main() {
-	endpoints := []spec.Endpoint{
-		{
-			Name:   "GetUser",
-			Method: spec.Get,
-			Path:   spec.NewPathTemplate("/users/{id}"),
-			Input: &spec.InputShape{
-				Params: map[string]spec.Field{
-					"id": {Ref: spec.TypeRef{Name: "string"}},
-				},
-				Query: map[string]spec.Field{
-					"verbose": {Ref: spec.TypeRef{Name: "boolean"}},
-				},
-				Body: &spec.TypeRef{Name: "UserRequest"},
-			},
-			Responses: []spec.Response{
-				{Code: 200, Ref: &spec.TypeRef{Name: "UserResponse"}},
-				{Code: 404, Ref: &spec.TypeRef{Name: "ErrorResponse"}},
-			},
-		},
+	log.SetFlags(0)
+
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, usage)
+		return
 	}
 
-	types := map[string]*spec.Type{
-		"UserResponse": {
-			Kind: spec.Object,
-			ObjectType: &spec.ObjectType{
-				Fields: map[string]spec.Field{
-					"id":   {Ref: spec.TypeRef{Name: "string"}},
-					"name": {Ref: spec.TypeRef{Name: "string"}},
-				},
-			},
-		},
-		"ErrorResponse": {
-			Kind: spec.Object,
-			ObjectType: &spec.ObjectType{
-				Fields: map[string]spec.Field{
-					"error": {Ref: spec.TypeRef{Name: "string"}},
-				},
-			},
-		},
-		"UserRequest": {
-			Kind: spec.Object,
-			ObjectType: &spec.ObjectType{
-				Fields: map[string]spec.Field{
-					"id":  {Ref: spec.TypeRef{Name: "string"}},
-					"age": {Ref: spec.TypeRef{Name: "integer"}, Optional: true},
-				},
-			},
-		},
-	}
+	command := os.Args[1]
 
-	api, err := spec.NewAPISpec("MyAPI", "http://localhost:8080", endpoints, types)
+	switch command {
+	case "generate":
+		if len(os.Args) < 4 {
+			fmt.Fprintln(os.Stderr, usage)
+			return
+		}
+		fs := flag.NewFlagSet("generate", flag.ExitOnError)
+		inputFile := fs.String("i", "", "Input file path")
+		outputPath := fs.String("o", "", "Output file path")
+		outputFile := os.Stdout
+		if *outputPath != "" {
+			f, err := os.Create(*outputPath)
+			if err != nil {
+				log.Fatalf("Error creating output file: %s", err)
+			}
+			defer f.Close()
+			outputFile = f
+		}
+		fs.Parse(os.Args[4:])
+		if *inputFile == "" {
+			fmt.Fprintln(os.Stderr, "Input file is required")
+			return
+		}
+		lang := os.Args[2]
+		target := os.Args[3]
+		generateCode(lang, target, *inputFile, outputFile)
+	case "validate":
+		fs := flag.NewFlagSet("validate", flag.ExitOnError)
+		inputFile := fs.String("i", "", "Input file path")
+		fs.Parse(os.Args[2:])
+		err := validateFile(*inputFile)
+		if err != nil {
+			log.Fatalf("Invalid File: %s", err)
+		}
+		log.Println("Validation successful")
+	default:
+		fmt.Fprintln(os.Stderr, usage)
+	}
+}
+
+func validateFile(inputPath string) error {
+	f, err := os.ReadFile(inputPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	// fmt.Println(api)
 
-	gen := golang.NewGoGenerator(api)
+	_, err = dsl.NewTranslatorFromString(string(f))
+	return err
+}
 
-	fmt.Println(gen.GenerateTypeDefs())
-	// fmt.Println(gen.GenerateEndpoints())
-	fmt.Println(gen.GenerateClientMethods())
+func generateCode(lang, target, inputPath string, outputFile io.Writer) {
+	f, err := os.ReadFile(inputPath)
+	if err != nil {
+		log.Fatalf("Error reading file: %s", err)
+	}
+
+	apiSpec, err := dsl.NewTranslatorFromString(string(f))
+	if err != nil {
+		log.Fatalf("Error parsing file: %s", err)
+	}
+
+	err = apiSpec.Validate()
+	if err != nil {
+		log.Fatalf("Validation error: %s", err)
+	}
+
+	switch lang {
+	case "go":
+		gen := golang.NewGoGenerator(apiSpec)
+		types := gen.GenerateTypeDefs()
+		switch target {
+		case "server":
+			serverCode := gen.GenerateEndpoints()
+			outputFile.Write([]byte(types + serverCode))
+		case "client":
+			clientCode := gen.GenerateClientMethods()
+			outputFile.Write([]byte(types + clientCode))
+		default:
+			log.Fatalf("Unknown target: %s", target)
+		}
+	case "ts":
+		gen := ts.NewTsGenerator(apiSpec)
+		types := gen.GenerateTypeDefs()
+		switch target {
+		case "server":
+			log.Fatalf("TypeScript server generation not implemented yet")
+		case "client":
+			clientCode := gen.GenerateClient()
+			outputFile.Write([]byte(types + clientCode))
+		default:
+			log.Fatalf("Unknown target: %s", target)
+		}
+	}
 }

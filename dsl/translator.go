@@ -119,3 +119,13 @@ func (t *Translator) Translate(s *Spec) (*spec.APISpec, error) {
 	}
 	return spec.NewAPISpec(s.Name, "localhost:8080", endpoints, types)
 }
+
+func NewTranslatorFromString(input string) (*spec.APISpec, error) {
+	parser := NewParserFromString(input)
+	s, err := parser.Parse()
+	if err != nil {
+		return nil, err
+	}
+	t := &Translator{}
+	return t.Translate(s)
+}

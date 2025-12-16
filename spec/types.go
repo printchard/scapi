@@ -53,6 +53,7 @@ type ArrayType struct {
 type Field struct {
 	Ref      TypeRef
 	Optional bool
+	Nullable bool
 }
 
 type PrimitiveType int
@@ -62,7 +63,6 @@ const (
 	Integer
 	Float
 	Boolean
-	Null
 )
 
 func (p PrimitiveType) String() string {
@@ -75,8 +75,6 @@ func (p PrimitiveType) String() string {
 		return "float"
 	case Boolean:
 		return "boolean"
-	case Null:
-		return "null"
 	default:
 		return "unknown"
 	}

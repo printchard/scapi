@@ -56,7 +56,8 @@ func DefaultApiSpec() *spec.APISpec {
 			},
 		},
 	}
-	return spec.NewAPISpec(endpoints, types)
+	api, _ := spec.NewAPISpec("TestAPI", "http://localhost:1", endpoints, types)
+	return api
 }
 
 func TestParseApiSpec(t *testing.T) {

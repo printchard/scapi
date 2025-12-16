@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	gogen "github.com/printchard/scapi/generators/go"
+	"github.com/printchard/scapi/generators/golang"
 	"github.com/printchard/scapi/spec"
 )
 
@@ -57,28 +57,16 @@ func main() {
 			},
 		},
 	}
-	api := spec.NewAPISpec(endpoints, types)
 
-	err := api.ValidateTypes()
+	api, err := spec.NewAPISpec("MyAPI", "http://localhost:8080", endpoints, types)
 	if err != nil {
-		fmt.Printf("API Specification validation error: %v\n", err)
-		return
+		panic(err)
 	}
-	err = api.ValidateEndpoints()
-	if err != nil {
-		fmt.Printf("API Specification validation error: %v\n", err)
-		return
-	}
-	err = api.ValidatePaths()
-	if err != nil {
-		fmt.Printf("API Specification validation error: %v\n", err)
-		return
-	}
+	// fmt.Println(api)
 
-	fmt.Println(api)
-
-	gen := gogen.NewGoGenerator(api)
+	gen := golang.NewGoGenerator(api)
 
 	fmt.Println(gen.GenerateTypeDefs())
-	fmt.Println(gen.GenerateEndpoints())
+	// fmt.Println(gen.GenerateEndpoints())
+	fmt.Println(gen.GenerateClientMethods())
 }

@@ -6,8 +6,9 @@ import (
 )
 
 type Formatter struct {
-	indent  string
-	builder strings.Builder
+	indent      string
+	builder     strings.Builder
+	lineBuilder strings.Builder
 }
 
 func (p *Formatter) Indent() {
@@ -22,6 +23,17 @@ func (p *Formatter) Dedent() {
 
 func (p *Formatter) Line(format string, args ...any) {
 	p.builder.WriteString(fmt.Sprintf("%s%s\n", p.indent, fmt.Sprintf(format, args...)))
+}
+
+func (p *Formatter) Partial(format string, args ...any) {
+	p.lineBuilder.WriteString(fmt.Sprintf(format, args...))
+}
+
+func (p *Formatter) Flush() {
+	if p.lineBuilder.Len() > 0 {
+		p.builder.WriteString(fmt.Sprintf("%s%s", p.indent, p.lineBuilder.String()))
+		p.lineBuilder.Reset()
+	}
 }
 
 func (p *Formatter) String() string {

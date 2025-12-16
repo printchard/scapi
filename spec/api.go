@@ -1,6 +1,9 @@
 package spec
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+)
 
 type InputShape struct {
 	Params map[string]Field
@@ -19,6 +22,8 @@ type Endpoint struct {
 type APISpec struct {
 	Endpoints []Endpoint
 	Types     map[string]*Type
+	Name      string
+	BaseURL   string
 }
 
 func (s *APISpec) ResolveTypeRef(typeRef TypeRef) (*Type, bool) {
@@ -104,6 +109,9 @@ func (api *APISpec) ValidateEndpoints() error {
 				if field.Optional {
 					return fmt.Errorf("endpoint %s param %s cannot be optional", endpoint.Name, paramName)
 				}
+				if field.Nullable {
+					return fmt.Errorf("endpoint %s param %s cannot be nullable", endpoint.Name, paramName)
+				}
 				if _, ok := api.ResolveTypeRef(field.Ref); !ok {
 					return fmt.Errorf("unresolved type reference: %s in endpoint %s param %s", field.Ref.Name, endpoint.Name, paramName)
 				}
@@ -169,6 +177,18 @@ func (api *APISpec) ValidatePaths() error {
 }
 
 func (api *APISpec) Validate() error {
+	if api.Name == "" {
+		return fmt.Errorf("API name cannot be empty")
+	}
+
+	if api.BaseURL == "" {
+		return fmt.Errorf("API base URL cannot be empty")
+	}
+
+	if _, err := url.Parse(api.BaseURL); err != nil {
+		return fmt.Errorf("invalid API base URL: %v", err)
+	}
+
 	if err := api.ValidateTypes(); err != nil {
 		return err
 	}
@@ -260,13 +280,25 @@ func (api *APISpec) String() string {
 	return f.String()
 }
 
-func NewAPISpec(endpoints []Endpoint, types map[string]*Type) *APISpec {
+func NewAPISpec(name string, baseURL string, endpoints []Endpoint, types map[string]*Type) (*APISpec, error) {
 	types["string"] = &Type{Kind: Primitive, PrimitiveType: String}
 	types["integer"] = &Type{Kind: Primitive, PrimitiveType: Integer}
 	types["float"] = &Type{Kind: Primitive, PrimitiveType: Float}
 	types["boolean"] = &Type{Kind: Primitive, PrimitiveType: Boolean}
-	return &APISpec{
+	normalizedUrl := baseURL
+	if len(normalizedUrl) > 0 && normalizedUrl[len(normalizedUrl)-1] != '/' {
+		normalizedUrl += "/"
+	}
+
+	api := &APISpec{
+		Name:      name,
+		BaseURL:   normalizedUrl,
 		Endpoints: endpoints,
 		Types:     types,
 	}
+
+	if err := api.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid API specification: %v", err)
+	}
+	return api, nil
 }

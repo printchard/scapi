@@ -1,10 +1,17 @@
-package generators
+package golang
 
 import (
+	"fmt"
 	"unicode"
 
 	"github.com/printchard/scapi/spec"
 )
+
+type GoGenerator struct {
+	API      *spec.APISpec
+	Resolver spec.TypeResolver
+	Name     string
+}
 
 func capitalize(str string) string {
 	if len(str) == 0 {
@@ -16,9 +23,22 @@ func capitalize(str string) string {
 	return str
 }
 
-type GoGenerator struct {
-	API      *spec.APISpec
-	Resolver spec.TypeResolver
+func (g *GoGenerator) generateErrorTypeDef() string {
+	formatter := spec.NewFormatter()
+	formatter.Line("type HTTPError struct {")
+	formatter.Indent()
+	formatter.Line("Code int `json:\"code\"`")
+	formatter.Line("Body any `json:\"body\"`")
+	formatter.Dedent()
+	formatter.Line("}")
+	formatter.Line("")
+	formatter.Line("func (e *HTTPError) Error() string {")
+	formatter.Indent()
+	formatter.Line("return fmt.Sprintf(\"HTTP %%d: %%v\", e.Code, e.Body)")
+	formatter.Dedent()
+	formatter.Line("}")
+	formatter.Line("")
+	return formatter.String()
 }
 
 func (g *GoGenerator) generateObjectTypeDef(typeName string, obj *spec.ObjectType) string {
@@ -26,8 +46,14 @@ func (g *GoGenerator) generateObjectTypeDef(typeName string, obj *spec.ObjectTyp
 	formatter.Line("type %s struct {", typeName)
 	formatter.Indent()
 	for fieldName, field := range obj.Fields {
-		goType := g.generateGoType(field.Ref.Name, field.Optional)
-		formatter.Line("%s %s", capitalize(fieldName), goType)
+		tags := fmt.Sprintf("`json:\"%s", fieldName)
+		goType := g.generateGoType(field.Ref, field.Optional)
+		if field.Optional {
+			tags += ",omitempty"
+		}
+		tags += "\"`"
+
+		formatter.Line("%s %s %s", capitalize(fieldName), goType, tags)
 	}
 	formatter.Dedent()
 	formatter.Line("}")
@@ -35,9 +61,9 @@ func (g *GoGenerator) generateObjectTypeDef(typeName string, obj *spec.ObjectTyp
 	return formatter.String()
 }
 
-func (g *GoGenerator) generateGoType(tName string, optional bool) string {
-	if g.Resolver.IsPrimitive(spec.TypeRef{Name: tName}) {
-		primType, _ := g.Resolver.PrimitiveOf(spec.TypeRef{Name: tName})
+func (g *GoGenerator) generateGoType(tRef spec.TypeRef, optional bool) string {
+	if g.Resolver.IsPrimitive(tRef) {
+		primType, _ := g.Resolver.PrimitiveOf(tRef)
 		var typ string
 		switch primType {
 		case spec.String:
@@ -49,26 +75,27 @@ func (g *GoGenerator) generateGoType(tName string, optional bool) string {
 		case spec.Boolean:
 			typ = "bool"
 		default:
-			return "interface{}"
+			return "any"
 		}
 		if optional {
 			return "*" + typ
 		}
 		return typ
-	} else if g.Resolver.IsObject(spec.TypeRef{Name: tName}) {
+	} else if g.Resolver.IsObject(tRef) {
 		if optional {
-			return "*" + tName
+			return "*" + tRef.Name
 		}
-		return tName
-	} else if g.Resolver.IsArray(spec.TypeRef{Name: tName}) {
-		elemRef, _ := g.Resolver.ArrayElement(spec.TypeRef{Name: tName})
-		return "[]" + g.generateGoType(elemRef.Name, false)
+		return tRef.Name
+	} else if g.Resolver.IsArray(tRef) {
+		elemRef, _ := g.Resolver.ArrayElement(tRef)
+		return "[]" + g.generateGoType(elemRef, false)
 	}
-	return "interface{}"
+	return "any"
 }
 
 func (g *GoGenerator) GenerateTypeDefs() string {
-	result := "package main\n\nimport \"context\"\n\n"
+	result := "package main\n\nimport (\n  \"context\"\n  \"fmt\"\n  \"net/url\"\n  \"encoding/json\"\n  \"net/http\"\n)\n\n"
+	result += g.generateErrorTypeDef()
 	for typeName, typ := range g.API.Types {
 		if typ.Kind != spec.Object {
 			continue
@@ -83,7 +110,7 @@ func (g *GoGenerator) generateParamsWrapper(endpoint spec.Endpoint) string {
 	formatter.Line("type %sParams struct {", endpoint.Name)
 	formatter.Indent()
 	for paramName, field := range endpoint.Input.Params {
-		goType := g.generateGoType(field.Ref.Name, field.Optional)
+		goType := g.generateGoType(field.Ref, field.Optional)
 		formatter.Line("%s %s", capitalize(paramName), goType)
 	}
 	formatter.Dedent()
@@ -97,7 +124,7 @@ func (g *GoGenerator) generateQueryWrapper(endpoint spec.Endpoint) string {
 	formatter.Line("type %sQuery struct {", endpoint.Name)
 	formatter.Indent()
 	for queryName, field := range endpoint.Input.Query {
-		goType := g.generateGoType(field.Ref.Name, field.Optional)
+		goType := g.generateGoType(field.Ref, field.Optional)
 		formatter.Line("%s %s", capitalize(queryName), goType)
 	}
 	formatter.Dedent()
@@ -130,47 +157,4 @@ func (g *GoGenerator) generateInputWrapper(endpoint spec.Endpoint) string {
 	formatter.Line("}")
 	formatter.Line("")
 	return subTypeDefs + formatter.String()
-}
-
-func (g *GoGenerator) GenerateEndpointFunc(endpoint spec.Endpoint) string {
-	defs := ""
-	formatter := spec.NewFormatter()
-	formatter.Line("func %s(", endpoint.Name)
-	formatter.Indent()
-	formatter.Line("ctx context.Context,")
-	if endpoint.Input != nil {
-		defs += g.generateInputWrapper(endpoint)
-		formatter.Line("input %sInput,", endpoint.Name)
-	}
-	formatter.Dedent()
-	formatter.Line(") (")
-	formatter.Indent()
-	successResp := g.Resolver.ResolveSuccessResponse(endpoint)
-	formatter.Line("*%s,", successResp.Ref.Name)
-	formatter.Line("error,")
-	formatter.Dedent()
-	formatter.Line(") {")
-	formatter.Indent()
-	formatter.Line("// TODO: Implement the function logic")
-	formatter.Line("return nil, nil")
-	formatter.Dedent()
-	formatter.Line("}")
-	formatter.Line("")
-
-	return defs + formatter.String()
-}
-
-func (g *GoGenerator) GenerateEndpoints() string {
-	result := ""
-	for _, endpoint := range g.API.Endpoints {
-		result += g.GenerateEndpointFunc(endpoint)
-	}
-	return result
-}
-
-func NewGoGenerator(api *spec.APISpec) *GoGenerator {
-	return &GoGenerator{
-		API:      api,
-		Resolver: spec.NewTypeResolver(api),
-	}
 }
